@@ -40,3 +40,6 @@ run_scrape.bat
 run_test.bat
 setup.bat
 setup_login.bat
+
+# Streamlit Secrets（公開禁止、GitHub Token を含む）
+streamlit_app/.streamlit/secrets.toml
