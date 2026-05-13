@@ -141,16 +141,23 @@ st.sidebar.title("🤖 AI X Bot")
 st.sidebar.markdown(f"**Repo:** [{REPO}](https://github.com/{REPO})")
 st.sidebar.divider()
 
-page = st.sidebar.radio(
-    "ページ",
-    [
-        "📊 ダッシュボード",
-        "▶️ 手動実行",
-        "📝 投稿プレビュー",
-        "💬 返信履歴",
-        "⏰ スケジュール設定",
-    ],
-)
+# session_state でページ管理（他ページからの遷移にも対応）
+PAGES = [
+    "📊 ダッシュボード",
+    "▶️ 手動実行",
+    "📝 投稿プレビュー",
+    "💬 返信履歴",
+    "⏰ スケジュール設定",
+]
+
+# 他ページからの遷移要求を処理（ウィジェット宣言"前"に書き換える必要がある）
+if "_goto_page" in st.session_state:
+    st.session_state.page = st.session_state.pop("_goto_page")
+
+if "page" not in st.session_state:
+    st.session_state.page = PAGES[0]
+
+page = st.sidebar.radio("ページ", PAGES, key="page")
 
 st.sidebar.divider()
 if st.sidebar.button("🔄 キャッシュをクリア", use_container_width=True):
@@ -185,6 +192,7 @@ if page == "📊 ダッシュボード":
     if not runs:
         st.info("実行履歴がありません。")
     else:
+        st.caption("「👁️ 中身を見る」で投稿プレビューに遷移、「🔗 GitHub」で GitHub Actions のページに飛びます（ログイン必要）。")
         for run in runs:
             run_id = run["id"]
             emoji = status_emoji(run["status"], run.get("conclusion"))
@@ -196,12 +204,16 @@ if page == "📊 ダッシュボード":
                 end = datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00"))
                 duration = f"{int((end - start).total_seconds())}s"
 
-            cols = st.columns([1, 3, 3, 3, 2])
+            cols = st.columns([1, 3, 3, 3, 2, 1])
             cols[0].markdown(f"### {emoji}")
             cols[1].markdown(f"**#{run_id}**")
             cols[2].markdown(f"📅 {created}")
             cols[3].markdown(f"🎯 `{trigger}` · {duration}")
-            cols[4].markdown(f"[詳細 →]({run['html_url']})")
+            if cols[4].button("👁️ 中身を見る", key=f"view_{run_id}", use_container_width=True):
+                st.session_state.preview_run_id = run_id
+                st.session_state._goto_page = "📝 投稿プレビュー"
+                st.rerun()
+            cols[5].markdown(f"[🔗]({run['html_url']})", help="GitHub Actions ページを開く（要ログイン）")
 
 # ========================================
 # ▶️ 手動実行
@@ -263,24 +275,29 @@ elif page == "📝 投稿プレビュー":
     with col1:
         st.caption("最新の DRY RUN 結果を表示します。新しく生成した場合は完了まで約1分待ってから再読込。")
 
-    # 最新の DRY RUN を探す
+    # 最新の実行を探す（cron / workflow_dispatch どちらでも history があれば表示可能）
     runs = get_workflow_runs(per_page=30)
-
-    # event が workflow_dispatch の中から最新成功を取得（cron実行（DRY_RUN=false）はスキップ）
-    candidates = [
-        r for r in runs
-        if r.get("conclusion") == "success" and r.get("event") == "workflow_dispatch"
-    ]
+    candidates = [r for r in runs if r.get("conclusion") == "success"]
 
     if not candidates:
-        st.info("DRY RUN の実行履歴がまだありません。「🔄 最新を生成」ボタンで作成してください。")
+        st.info("成功した実行がまだありません。「🔄 最新を生成」ボタンで作成してください。")
         st.stop()
 
     options = {
-        f"#{r['id']}  ·  {fmt_jst_full(r['created_at'])}": r["id"]
+        f"#{r['id']}  ·  {fmt_jst_full(r['created_at'])}  ·  {r['event']}": r["id"]
         for r in candidates
     }
-    selected_label = st.selectbox("表示する実行を選択", list(options.keys()))
+
+    # ダッシュボードから遷移してきた場合は該当 run を初期選択
+    default_idx = 0
+    target_id = st.session_state.pop("preview_run_id", None)
+    if target_id:
+        for i, rid in enumerate(options.values()):
+            if rid == target_id:
+                default_idx = i
+                break
+
+    selected_label = st.selectbox("表示する実行を選択", list(options.keys()), index=default_idx)
     selected_run_id = options[selected_label]
 
     with st.spinner("生成結果を取得中..."):
@@ -320,7 +337,7 @@ elif page == "📝 投稿プレビュー":
                 if p.get("news_title"):
                     st.caption(f"📰 元ニュース: {p['news_title']}")
 
-        # 返信
+        # 返信（元投稿 → 返信ペア表示）
         replies = history.get("replies", [])
         st.subheader(f"💬 返信文（{len(replies)}件）")
         if not replies:
@@ -328,7 +345,7 @@ elif page == "📝 投稿プレビュー":
         for i, r in enumerate(replies, 1):
             success = r.get("success")
             msg = r.get("message") or ""
-            if success:
+            if success and "DRY_RUN" not in msg:
                 badge = "✅ 送信成功"
             elif "返信制限" in msg:
                 badge = "⛔ 返信制限"
@@ -340,9 +357,25 @@ elif page == "📝 投稿プレビュー":
                 head_cols = st.columns([4, 2])
                 head_cols[0].markdown(f"**[{i}/{len(replies)}]** → `{r.get('original_account', '?')}`")
                 head_cols[1].caption(badge)
-                st.code(r.get("reply_text", "（生成失敗）"), language=None)
-                if r.get("tweet_url"):
-                    st.caption(f"[元ツイートを開く →]({r['tweet_url']})")
+
+                # 元投稿 → 返信 を2列で
+                ot = r.get("original_text") or ""
+                body_cols = st.columns([1, 1])
+                with body_cols[0]:
+                    if ot:
+                        st.caption(f"📝 元の投稿（エンゲ {r.get('engagement_score', 0)}）")
+                        st.markdown(f"> {ot[:300]}{'...' if len(ot) > 300 else ''}")
+                        if r.get("tweet_url"):
+                            st.caption(f"[🔗 元ツイートを開く]({r['tweet_url']})")
+                    else:
+                        st.caption("📝 元の投稿（旧フォーマット、本文未記録）")
+                        if r.get("tweet_url"):
+                            st.caption(f"[🔗 元ツイートを開く]({r['tweet_url']})")
+                with body_cols[1]:
+                    st.caption("💬 生成された返信")
+                    st.code(r.get("reply_text", "（生成失敗）"), language=None)
+                    if r.get("url") and success:
+                        st.caption(f"[✅ 投稿を見る]({r['url']})")
     else:
         # フォールバック: HTML レポートを表示
         html_files = [n for n in contents if n.endswith(".html")]
@@ -360,7 +393,7 @@ elif page == "📝 投稿プレビュー":
 
 elif page == "💬 返信履歴":
     st.title("💬 返信履歴")
-    st.markdown("過去の実行から自動返信の試行記録を集計します。403返信制限の追跡用。")
+    st.markdown("**誰のどの投稿にどんな返信をしたか**を一覧表示します。403返信制限の追跡用。")
 
     max_runs = st.slider("集計対象の実行数", min_value=5, max_value=30, value=15, step=5)
 
@@ -380,27 +413,11 @@ elif page == "💬 返信履歴":
         if not history:
             continue
         processed_runs += 1
-        run_time = history.get("timestamp", run.get("created_at"))
-        is_dry = history.get("dry_run", False)
         for r in history.get("replies", []):
-            success = r.get("success")
-            msg = r.get("message") or ""
-            if success:
-                result_label = "✅ 成功"
-            elif "返信制限" in msg:
-                result_label = "⛔ 返信制限"
-            elif "DRY_RUN" in msg:
-                result_label = "🧪 DRY RUN"
-            else:
-                result_label = f"❌ エラー"
-            all_replies.append({
-                "実行日時": fmt_jst_full(run_time),
-                "モード": "🧪 DRY" if is_dry else "🔴 本番",
-                "送信先": r.get("original_account") or "-",
-                "結果": result_label,
-                "本文": (r.get("reply_text") or "")[:50] + ("..." if len(r.get("reply_text") or "") > 50 else ""),
-                "詳細": (r.get("message") or "")[:80],
-            })
+            rec = dict(r)
+            rec["_run_timestamp"] = history.get("timestamp", run.get("created_at"))
+            rec["_dry_run"] = history.get("dry_run", False)
+            all_replies.append(rec)
 
     progress.empty()
 
@@ -412,22 +429,94 @@ elif page == "💬 返信履歴":
         )
         st.stop()
 
+    # 新しい順に
+    all_replies.sort(key=lambda x: x.get("_run_timestamp", ""), reverse=True)
+
     # サマリー
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("集計対象", f"{processed_runs}/{len(runs)} run")
     col2.metric("返信試行数", f"{len(all_replies)} 件")
-    success = sum(1 for r in all_replies if r["結果"] == "✅ 成功")
-    restricted = sum(1 for r in all_replies if r["結果"] == "⛔ 返信制限")
-    col3.metric("成功", success)
-    col4.metric("返信制限 (403)", restricted)
+
+    def _classify(r):
+        msg = r.get("message") or ""
+        if r.get("success") and "DRY_RUN" not in msg:
+            return "success"
+        if "返信制限" in msg:
+            return "restricted"
+        if "DRY_RUN" in msg:
+            return "dry"
+        return "error"
+
+    success_cnt = sum(1 for r in all_replies if _classify(r) == "success")
+    restricted_cnt = sum(1 for r in all_replies if _classify(r) == "restricted")
+    col3.metric("送信成功", success_cnt)
+    col4.metric("返信制限 (403)", restricted_cnt)
 
     st.divider()
-    st.subheader("返信ログ")
-    st.dataframe(
-        all_replies,
-        use_container_width=True,
-        hide_index=True,
+
+    # フィルタ
+    fcol1, fcol2 = st.columns(2)
+    accounts = sorted({r.get("original_account") for r in all_replies if r.get("original_account")})
+    selected_account = fcol1.selectbox("送信先アカウントでフィルタ", ["（すべて）"] + list(accounts))
+    result_filter = fcol2.selectbox(
+        "結果でフィルタ",
+        ["（すべて）", "✅ 成功", "⛔ 返信制限", "🧪 DRY RUN", "❌ エラー"],
     )
+
+    filtered = all_replies
+    if selected_account != "（すべて）":
+        filtered = [r for r in filtered if r.get("original_account") == selected_account]
+
+    filter_map = {
+        "✅ 成功": "success",
+        "⛔ 返信制限": "restricted",
+        "🧪 DRY RUN": "dry",
+        "❌ エラー": "error",
+    }
+    if result_filter in filter_map:
+        target = filter_map[result_filter]
+        filtered = [r for r in filtered if _classify(r) == target]
+
+    st.caption(f"📊 表示中: {len(filtered)} 件 / 全 {len(all_replies)} 件")
+    st.divider()
+
+    # カード形式で表示
+    for r in filtered:
+        kind = _classify(r)
+        msg = r.get("message") or ""
+        status_label = {
+            "success":    "✅ 送信成功",
+            "restricted": "⛔ 返信制限 (403)",
+            "dry":        "🧪 DRY RUN",
+            "error":      f"❌ {msg[:30]}",
+        }[kind]
+
+        with st.container(border=True):
+            head_cols = st.columns([3, 2, 2, 3])
+            head_cols[0].markdown(f"### → `{r.get('original_account', '?')}`")
+            head_cols[1].caption(f"📅 {fmt_jst_full(r.get('_run_timestamp', ''))}")
+            head_cols[2].caption("🧪 DRY RUN" if r.get("_dry_run") else "🔴 本番")
+            head_cols[3].markdown(f"**{status_label}**")
+
+            ot = r.get("original_text") or ""
+            body_cols = st.columns([1, 1])
+            with body_cols[0]:
+                if ot:
+                    st.caption(f"📝 元の投稿（エンゲ {r.get('engagement_score', 0)}）")
+                    st.markdown(f"> {ot[:300]}{'...' if len(ot) > 300 else ''}")
+                    if r.get("tweet_url"):
+                        st.caption(f"[🔗 元ツイートを開く]({r['tweet_url']})")
+                else:
+                    st.caption("📝 元の投稿（旧フォーマット・本文未記録）")
+                    if r.get("tweet_url"):
+                        st.caption(f"[🔗 元ツイートを開く]({r['tweet_url']})")
+            with body_cols[1]:
+                st.caption("💬 生成された返信")
+                st.code(r.get("reply_text", "（生成失敗）"), language=None)
+                if kind == "success" and r.get("url"):
+                    st.caption(f"[✅ 自分の返信を見る]({r['url']})")
+                elif kind == "error" and msg:
+                    st.caption(f"⚠️ {msg[:120]}")
 
 # ========================================
 # ⏰ スケジュール設定

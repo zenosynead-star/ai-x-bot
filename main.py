@@ -33,13 +33,15 @@ def save_history(reply_results, replies, post_results, original_posts):
     for i, r in enumerate(reply_results):
         rp = replies[i] if i < len(replies) else {}
         reply_history.append({
-            "original_account": r.get("original_account") or rp.get("original_account"),
-            "reply_text":       rp.get("reply", ""),
-            "tweet_id":         rp.get("tweet_id"),
-            "tweet_url":        rp.get("tweet_url"),
-            "success":          r.get("success"),
-            "message":          r.get("message"),
-            "url":              r.get("url"),
+            "original_account":  r.get("original_account") or rp.get("original_account"),
+            "original_text":     rp.get("original_text", ""),
+            "engagement_score":  rp.get("engagement_score", 0),
+            "reply_text":        rp.get("reply", ""),
+            "tweet_id":          rp.get("tweet_id"),
+            "tweet_url":         rp.get("tweet_url"),
+            "success":           r.get("success"),
+            "message":           r.get("message"),
+            "url":               r.get("url"),
         })
 
     post_history = []
