@@ -3,7 +3,8 @@ AI X Bot — フォロワー成長特化版
 毎日実行するだけで返信・投稿を自動化する
 """
 
-import os, sys, io, schedule, time
+import os, sys, io, json, schedule, time
+from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -20,6 +21,51 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 
 MAX_POSTS = int(os.getenv("MAX_POSTS_PER_DAY", "3"))
 MAX_REPLIES = int(os.getenv("MAX_REPLIES_PER_DAY", "5"))
+
+
+def save_history(reply_results, replies, post_results, original_posts):
+    """実行履歴を history/YYYYMMDD_HHMMSS.json として保存。
+    Streamlit 管理画面が artifact 経由でこの JSON を読んで履歴表示に使う。
+    """
+    Path("history").mkdir(exist_ok=True)
+
+    reply_history = []
+    for i, r in enumerate(reply_results):
+        rp = replies[i] if i < len(replies) else {}
+        reply_history.append({
+            "original_account": r.get("original_account") or rp.get("original_account"),
+            "reply_text":       rp.get("reply", ""),
+            "tweet_id":         rp.get("tweet_id"),
+            "tweet_url":        rp.get("tweet_url"),
+            "success":          r.get("success"),
+            "message":          r.get("message"),
+            "url":              r.get("url"),
+        })
+
+    post_history = []
+    for i, r in enumerate(post_results):
+        op = original_posts[i] if i < len(original_posts) else {}
+        post_history.append({
+            "style":         op.get("style") or r.get("style"),
+            "post_text":     op.get("post", ""),
+            "char_count":    op.get("char_count"),
+            "twitter_count": op.get("twitter_count"),
+            "news_title":    (op.get("news") or {}).get("title"),
+            "success":       r.get("success"),
+            "message":       r.get("message"),
+            "url":           r.get("url"),
+        })
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "dry_run":   is_dry_run(),
+        "replies":   reply_history,
+        "posts":     post_history,
+    }
+
+    fname = Path("history") / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    fname.write_text(json.dumps(entry, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"  💾 履歴を保存: {fname}")
 
 
 def print_header():
@@ -75,6 +121,9 @@ def run_bot(scrape_fresh: bool = True):
     best_times = BUZZ_PATTERNS["best_post_times"]
     generate_report(replies, original_posts, best_times,
                     reply_results=reply_results, post_results=post_results)
+
+    # ===== Step 6: 履歴を JSON 保存（管理画面が参照） =====
+    save_history(reply_results, replies, post_results, original_posts)
 
     # サマリー表示
     ok_replies = sum(1 for r in reply_results if r["success"])

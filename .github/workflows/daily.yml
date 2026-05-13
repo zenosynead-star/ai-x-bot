@@ -52,6 +52,7 @@ jobs:
           name: reports-${{ github.run_id }}
           path: |
             reports/
+            history/
             today_trends.json
-          retention-days: 14
+          retention-days: 30
           if-no-files-found: ignore
