@@ -4,7 +4,12 @@ on:
   schedule:
     # UTC 22:00 = JST 07:00（毎日朝7時に実行）
     - cron: '0 22 * * *'
-  workflow_dispatch:  # 管理画面から手動実行可能
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'DRY RUN: 投稿せず内容だけ確認（手動実行時のデフォルト）'
+        type: boolean
+        default: true
 
 jobs:
   run-bot:
@@ -36,7 +41,7 @@ jobs:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           MAX_POSTS_PER_DAY: '3'
           MAX_REPLIES_PER_DAY: '5'
-          DRY_RUN: 'False'
+          DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
           PYTHONIOENCODING: 'utf-8'
         run: python main.py --scrape
 
