@@ -231,8 +231,11 @@ def load_fallback_trends() -> list:
 
 if __name__ == "__main__":
     import sys, io
-    if hasattr(sys.stdout, "buffer"):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    try:
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
     posts = collect_trending_posts()
     print(f"\n収集完了: {len(posts)}件")

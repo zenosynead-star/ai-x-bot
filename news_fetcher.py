@@ -108,8 +108,11 @@ def get_top_news(n: int = 5) -> List[Dict]:
 if __name__ == "__main__":
     import sys
     import io
-    if hasattr(sys.stdout, "buffer"):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    try:
+        if hasattr(sys.stdout, "buffer"):
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass  # Streamlit Cloud などで stdout を置き換えられない場合は無視
 
     # テスト実行
     news = get_top_news(3)
