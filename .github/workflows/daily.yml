@@ -42,6 +42,9 @@ jobs:
           MAX_POSTS_PER_DAY: '3'
           MAX_REPLIES_PER_DAY: '5'
           DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
+          # mention: 本文先頭に@usernameを付けた通常投稿として送る（403回避）
+          # reply:   in_reply_to_tweet_id指定の返信（新規垢は403が出る）
+          REPLY_MODE: 'mention'
           PYTHONIOENCODING: 'utf-8'
         run: python main.py --scrape
 

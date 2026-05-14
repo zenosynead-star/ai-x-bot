@@ -87,7 +87,12 @@ def post_tweet(text: str, reply_to_id: str = None) -> dict:
 def post_replies(replies: list, interval: int = 45) -> list:
     """
     返信リストを順番に投稿する。
-    返信制限ツイートは自動スキップして次の候補に切り替える。
+
+    REPLY_MODE 環境変数で送信方法を切り替え可能:
+      - "reply"   (default): in_reply_to_tweet_id を指定したリプライとして送る
+                             ※新規アカウントは X が 403 で弾く
+      - "mention":           本文先頭に @username を付けた通常投稿として送る
+                             ※相手のメンション欄に通知。403を回避できる
 
     Args:
         replies: generate_replies_for_trends() の出力リスト
@@ -96,27 +101,36 @@ def post_replies(replies: list, interval: int = 45) -> list:
     Returns:
         各投稿の結果リスト
     """
+    reply_mode = os.getenv("REPLY_MODE", "reply").lower()
     results = []
     total = len(replies)
     success_count = 0
 
-    print(f"\n📤 返信を自動投稿します（{total}件）")
+    label = "メンション投稿" if reply_mode == "mention" else "返信"
+    print(f"\n📤 {label}を自動投稿します（{total}件、mode={reply_mode}）")
 
     for i, r in enumerate(replies, 1):
         tweet_id = r.get("tweet_id")
-        print(f"\n  [{i}/{total}] {r['original_account']} への返信")
+        account = r.get("original_account") or ""
+        print(f"\n  [{i}/{total}] {account} への{label}")
 
-        result = post_tweet(r["reply"], reply_to_id=tweet_id)
+        if reply_mode == "mention":
+            # メンション投稿: @username を本文先頭に付けて通常投稿として送る
+            text = f"{account} {r['reply']}".strip()
+            result = post_tweet(text, reply_to_id=None)
+        else:
+            result = post_tweet(r["reply"], reply_to_id=tweet_id)
 
         # 返信制限エラー → スキップして記録
         if result.get("message") == "REPLY_RESTRICTED":
             print(f"  ⚠️  このツイートは返信制限あり → スキップ")
             result["message"] = "返信制限のためスキップ"
-            result["original_account"] = r["original_account"]
+            result["original_account"] = account
             results.append(result)
-            continue   # waitなしで次へ
+            continue
 
-        result["original_account"] = r["original_account"]
+        result["original_account"] = account
+        result["mode"] = reply_mode
         results.append(result)
         if result["success"]:
             success_count += 1
@@ -125,7 +139,7 @@ def post_replies(replies: list, interval: int = 45) -> list:
             print(f"  ⏳ {interval}秒待機中...")
             time.sleep(interval)
 
-    print(f"\n  ✅ 返信完了: {success_count}/{total}件 成功")
+    print(f"\n  ✅ {label}完了: {success_count}/{total}件 成功")
     return results
 
 
