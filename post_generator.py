@@ -228,7 +228,11 @@ def generate_daily_posts(news_items: list, count: int = 3) -> list:
 
 
 if __name__ == "__main__":
-    import sys, io
+    import sys
+    # Streamlit Cloud などが __main__ として誤実行する場合は何もせず終了
+    if "/mount/src/" in __file__ or "/mount/" in __file__:
+        sys.exit(0)
+    import io
     from dotenv import load_dotenv
     load_dotenv()
     try:

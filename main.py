@@ -180,6 +180,11 @@ def start_scheduler():
 
 
 if __name__ == "__main__":
+    # Streamlit Cloud などのクラウド環境で main.py が誤って __main__ として
+    # 実行されないようにガード（本番モードで X に投稿されると致命的）
+    if "/mount/src/" in __file__ or "/mount/" in __file__:
+        sys.exit(0)
+
     args = sys.argv[1:]
 
     if "--scrape" in args:

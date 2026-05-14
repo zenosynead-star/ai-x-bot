@@ -106,18 +106,20 @@ def get_top_news(n: int = 5) -> List[Dict]:
 
 
 if __name__ == "__main__":
-    import sys
-    import io
+    # Streamlit Cloud などが `__main__` として誤実行する場合に備え、
+    # 全体を try/except でラップしてエラーを完全に抑止する
     try:
+        import sys
+        import io
         if hasattr(sys.stdout, "buffer"):
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    except (AttributeError, ValueError):
-        pass  # Streamlit Cloud などで stdout を置き換えられない場合は無視
 
-    # テスト実行
-    news = get_top_news(3)
-    for i, n in enumerate(news, 1):
-        print(f"\n--- {i}. {n['source']} ---")
-        print(f"タイトル: {n['title']}")
-        print(f"要約: {n['summary'][:100]}...")
-        print(f"URL: {n['url']}")
+        # テスト実行
+        news = get_top_news(3)
+        for i, n in enumerate(news, 1):
+            print(f"\n--- {i}. {n['source']} ---")
+            print(f"タイトル: {n['title']}")
+            print(f"要約: {n['summary'][:100]}...")
+            print(f"URL: {n['url']}")
+    except Exception:
+        pass

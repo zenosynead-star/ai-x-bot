@@ -230,7 +230,11 @@ def load_fallback_trends() -> list:
 # ────────────────────────────────────────
 
 if __name__ == "__main__":
-    import sys, io
+    import sys
+    # Streamlit Cloud などが __main__ として誤実行する場合は何もせず終了
+    if "/mount/src/" in __file__ or "/mount/" in __file__:
+        sys.exit(0)
+    import io
     try:
         if hasattr(sys.stdout, "buffer"):
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
