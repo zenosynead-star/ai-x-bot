@@ -17,7 +17,8 @@ from report_generator import generate_report
 from x_poster import post_replies, post_original_posts, is_dry_run
 
 load_dotenv()
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if hasattr(sys.stdout, "buffer"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 MAX_POSTS = int(os.getenv("MAX_POSTS_PER_DAY", "3"))
 MAX_REPLIES = int(os.getenv("MAX_REPLIES_PER_DAY", "5"))

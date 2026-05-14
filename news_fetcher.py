@@ -108,7 +108,8 @@ def get_top_news(n: int = 5) -> List[Dict]:
 if __name__ == "__main__":
     import sys
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
     # テスト実行
     news = get_top_news(3)

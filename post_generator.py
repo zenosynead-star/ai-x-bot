@@ -231,7 +231,8 @@ if __name__ == "__main__":
     import sys, io
     from dotenv import load_dotenv
     load_dotenv()
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    if hasattr(sys.stdout, "buffer"):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
     test_news = {
         "title": "OpenAI、GPT-5を正式発表 — 推論能力が前世代比3倍に",
