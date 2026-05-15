@@ -1,9 +1,23 @@
 # AI X Bot — プロジェクト状況メモ
 
 **最終更新**: 2026-05-15  
-**ステータス**: ☁️ クラウド常駐運用中 ＋ 🎛 Streamlit 管理UI公開 / ✅ メンションモードで本番返信成功  
+**ステータス**: 🔍 **制限解除検知モード**（オリジナル投稿停止・返信のみauto試行で X側のリプライ制限解除を毎日チェック）  
 **リポジトリ**: https://github.com/zenosynead-star/ai-x-bot (public — Streamlit Cloud デプロイのため)  
 **管理画面**: https://ai-x-bot-dashboard.streamlit.app/
+
+## 現在の運用モード（2026-05-15〜）
+
+```
+オリジナル投稿: 🛑 一時停止（MAX_POSTS_PER_DAY=0）
+返信       : ✅ 毎日5件自動試行（REPLY_MODE=auto）
+              ├─ リプライ試行 → 成功なら mode=reply（制限解除のサイン）
+              └─ 403 ならメンション投稿でフォールバック (mode=mention_fallback)
+コスト      : 約5円/日（返信生成のみ・投稿は X がブロック中なら0円）
+目的        : 1年休眠アカウントのリプライ制限解除を検知
+```
+
+**制限解除を確認したらすぐに再開**:
+- `daily.yml` の `MAX_POSTS_PER_DAY: '0'` を `'3'` に戻して push するだけ
 
 ---
 

@@ -39,7 +39,9 @@ jobs:
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
-          MAX_POSTS_PER_DAY: '3'
+          # オリジナル投稿は一時停止中（返信制限解除の検知だけしたいため）
+          # 制限解除されたら '3' に戻して再開
+          MAX_POSTS_PER_DAY: '0'
           MAX_REPLIES_PER_DAY: '5'
           DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
           # auto:    リプライ試行 → 403 ならメンション投稿でフォールバック（推奨）
