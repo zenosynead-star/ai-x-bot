@@ -1,8 +1,9 @@
 # AI X Bot — プロジェクト状況メモ
 
-**最終更新**: 2026-05-14  
-**ステータス**: ☁️ GitHub Actions でクラウド常駐運用開始 / ⏳ 返信は新規アカウント制限中  
-**リポジトリ**: https://github.com/zenosynead-star/ai-x-bot (private)
+**最終更新**: 2026-05-15  
+**ステータス**: ☁️ クラウド常駐運用中 ＋ 🎛 Streamlit 管理UI公開 / ✅ メンションモードで本番返信成功  
+**リポジトリ**: https://github.com/zenosynead-star/ai-x-bot (public — Streamlit Cloud デプロイのため)  
+**管理画面**: https://ai-x-bot-dashboard.streamlit.app/
 
 ---
 
@@ -134,13 +135,14 @@ TARGET_ACCOUNTS = [
 
 ## 次にやること（優先度順）
 
-1. ✅ ~~自動返信の403回避~~ (2026-05-14 REPLY_MODE=mention で達成、5/5件成功)
+1. ✅ ~~自動返信の403回避~~ (2026-05-14 REPLY_MODE=mention で達成)
 2. ✅ ~~ターゲットアカウントを見直す~~ (URLフィルタ緩和で対応済み 2026-05-13)
-3. ✅ ~~スケジューラー常駐設定~~ (2026-05-14 GitHub Actions JST 07:00 cron)
-4. ✅ ~~管理画面の構築~~ (2026-05-14 Streamlit で5ページ実装、ローカル動作確認済み)
-5. **プロフィール最適化** — アイコン・自己紹介・固定ツイートを設定して流入を受け取れる状態に
-6. **Streamlit Cloud デプロイ** — 管理画面をローカルからクラウドへ、任意のブラウザから操作可能に
-7. **将来検討** — リプライ制限が解除されたら REPLY_MODE=reply に戻すか比較検証
+3. ✅ ~~スケジューラー常駐設定~~ (2026-05-14 GitHub Actions cron)
+4. ✅ ~~管理画面の構築~~ (2026-05-14 Streamlit 5ページ実装)
+5. ✅ ~~Streamlit Cloud デプロイ~~ (2026-05-15 完了、https://ai-x-bot-dashboard.streamlit.app/)
+6. **プロフィール最適化** — アイコン・自己紹介・固定ツイートを設定して流入を受け取れる状態に
+7. **cron 遅延の改善（任意）** — GitHub Actions cron はベストエフォートで遅延あり（5/14 は UTC 22:00→08:08 で約10時間遅延）。気になるなら Render Cron Jobs 等に移行
+8. **将来検討** — リプライ制限が解除されたら REPLY_MODE=reply に戻すか比較検証
 
 ---
 
@@ -158,3 +160,38 @@ TARGET_ACCOUNTS = [
 - **ターゲット見直し（URLフィルタ緩和）**: `x_scraper.py` line 94-101 を修正。URL除去後の本文が30文字以上なら採用に変更。`re` モジュール追加。5アカウント全部から3件ずつ計15件取れるように（Before: ctgptlb・SuguruKun_ai = 0件）
 - **GitHub Actions でクラウド化**: リポジトリ `zenosynead-star/ai-x-bot` (private) を作成。`.github/workflows/daily.yml` で UTC 22:00 = JST 07:00 の cron + `workflow_dispatch` 手動実行（`dry_run` boolean input、手動時のデフォルトは true）。Secrets 6個（GROQ_API_KEY、X_API_KEY/SECRET/ACCESS_TOKEN/ACCESS_TOKEN_SECRET/BEARER_TOKEN）を `gh secret set --body` で登録（パイプ経由は BOM 混入で失敗するため要注意）。DRY RUN 手動テスト2回目で全STEP完走確認（run #25811689051）。
 - **明朝 5/14 07:00 JST から本番自動運用開始**（DRY_RUN=false、3件のオリジナル投稿が自動投稿される。自動返信は新規垢制限のため0/5件のまま）
+
+## 2026-05-14〜15 の実績
+
+### 2026-05-14 深夜 — メンション投稿で 403 を完全回避
+- `x_poster.py` に `REPLY_MODE=mention` 分岐を追加。`in_reply_to_tweet_id` を指定せず本文先頭に `@username` を付ける通常投稿として送信
+- `daily.yml` の env に `REPLY_MODE: 'mention'` を固定
+- 02:34 JST 本番テスト (run #25838256724): メンション 5/5 件 + オリジナル投稿 3/3 件、**計8件すべて X に投稿成功**
+- コスト約 $0.12（約18円）
+
+### 2026-05-14 朝の cron 自動実行
+- **JST 17:08 に実行 (run #25849289422)**: cron 式は `0 22 * * *` (UTC 22:00 = JST 07:00) だが GitHub Actions のベストエフォートで約10時間遅延
+- 結果: メンション 5/5 + オリジナル 3/3 件成功、自動運用が機能していることを確認
+
+### 2026-05-15 — Streamlit Cloud デプロイ
+- リポジトリを **public** に変更（Streamlit Cloud の OAuth スコープが `public_repo` のみ対応のため、private のままでは「This repository does not exist」になる）
+- 最初の deploy で Main file path が `news_fetcher.py` に誤設定される事故。Settings 経由では変更不可なので、アプリを Delete して再 Deploy
+- 全 `__main__` ブロック内の `sys.stdout = io.TextIOWrapper(...)` を try/except + `/mount/src/` 早期終了でガード（Streamlit Cloud が依存解析で他 Python ファイルを誤実行する挙動への対策）
+- **公開 URL**: https://ai-x-bot-dashboard.streamlit.app/
+- 5ページ動作確認済み: ダッシュボード / 手動実行 / 投稿プレビュー / 返信履歴 / スケジュール設定
+
+---
+
+## 既知の制約・注意
+
+### GitHub Actions の cron 遅延
+- 無料 Actions の cron はベストエフォート、最大数時間〜10時間の遅延あり
+- 「JST 07:00 ぴったり」を保証したいなら Render Cron Jobs 等への移行検討
+
+### Streamlit Cloud は private repo 不可
+- OAuth スコープが `public_repo` のみ。private にすると deploy できない
+- リポジトリは public のまま運用。API キーは Secrets で完全に保護
+
+### Streamlit Cloud は `__main__` ブロックを誤実行
+- リポジトリ内の他 Python ファイルを依存解析で実行することがある
+- 全 `__main__` ブロックを `/mount/src/` 検出 + try/except でガード済み
