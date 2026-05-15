@@ -88,49 +88,59 @@ def post_replies(replies: list, interval: int = 45) -> list:
     """
     返信リストを順番に投稿する。
 
-    REPLY_MODE 環境変数で送信方法を切り替え可能:
-      - "reply"   (default): in_reply_to_tweet_id を指定したリプライとして送る
-                             ※新規アカウントは X が 403 で弾く
-      - "mention":           本文先頭に @username を付けた通常投稿として送る
-                             ※相手のメンション欄に通知。403を回避できる
-
-    Args:
-        replies: generate_replies_for_trends() の出力リスト
-        interval: 投稿間隔（秒）
+    REPLY_MODE 環境変数で送信方法を切り替え:
+      - "auto"   (推奨): まずリプライを試行 → 403 ならメンション投稿にフォールバック。
+                         X 側の制限が解除されたら自動的に本来のリプライに移行する。
+      - "reply"        : in_reply_to_tweet_id 指定のリプライのみ。
+                         新規アカウントは 403 で弾かれる。
+      - "mention"      : 本文先頭に @username を付けた通常投稿のみ。
+                         403 を確実に回避するが、相手のリプライ欄には出ない。
 
     Returns:
-        各投稿の結果リスト
+        各投稿の結果リスト（"mode" キーで実際の送信方法を記録）
     """
     reply_mode = os.getenv("REPLY_MODE", "reply").lower()
     results = []
     total = len(replies)
     success_count = 0
 
-    label = "メンション投稿" if reply_mode == "mention" else "返信"
-    print(f"\n📤 {label}を自動投稿します（{total}件、mode={reply_mode}）")
+    print(f"\n📤 返信を自動投稿します（{total}件、REPLY_MODE={reply_mode}）")
 
     for i, r in enumerate(replies, 1):
         tweet_id = r.get("tweet_id")
         account = r.get("original_account") or ""
-        print(f"\n  [{i}/{total}] {account} への{label}")
+        result = None
+        actual_mode = None
 
-        if reply_mode == "mention":
-            # メンション投稿: @username を本文先頭に付けて通常投稿として送る
+        if reply_mode == "auto":
+            # まず本来のリプライを試行
+            print(f"\n  [{i}/{total}] {account} へリプライ試行 (auto)")
+            result = post_tweet(r["reply"], reply_to_id=tweet_id)
+            actual_mode = "reply"
+
+            # 403 (REPLY_RESTRICTED) ならメンション投稿で再送
+            if result.get("message") == "REPLY_RESTRICTED":
+                print(f"  ⚠️  リプライ制限 → メンション投稿でフォールバック")
+                fallback_text = f"{account} {r['reply']}".strip()
+                result = post_tweet(fallback_text, reply_to_id=None)
+                actual_mode = "mention_fallback"
+
+        elif reply_mode == "mention":
+            print(f"\n  [{i}/{total}] {account} へメンション投稿")
             text = f"{account} {r['reply']}".strip()
             result = post_tweet(text, reply_to_id=None)
-        else:
-            result = post_tweet(r["reply"], reply_to_id=tweet_id)
+            actual_mode = "mention"
 
-        # 返信制限エラー → スキップして記録
-        if result.get("message") == "REPLY_RESTRICTED":
-            print(f"  ⚠️  このツイートは返信制限あり → スキップ")
-            result["message"] = "返信制限のためスキップ"
-            result["original_account"] = account
-            results.append(result)
-            continue
+        else:  # "reply" (default)
+            print(f"\n  [{i}/{total}] {account} へリプライ")
+            result = post_tweet(r["reply"], reply_to_id=tweet_id)
+            actual_mode = "reply"
+            if result.get("message") == "REPLY_RESTRICTED":
+                print(f"  ⚠️  リプライ制限 → スキップ")
+                result["message"] = "返信制限のためスキップ"
 
         result["original_account"] = account
-        result["mode"] = reply_mode
+        result["mode"] = actual_mode
         results.append(result)
         if result["success"]:
             success_count += 1
@@ -139,7 +149,10 @@ def post_replies(replies: list, interval: int = 45) -> list:
             print(f"  ⏳ {interval}秒待機中...")
             time.sleep(interval)
 
-    print(f"\n  ✅ {label}完了: {success_count}/{total}件 成功")
+    # auto モードの場合、reply 成功とfallback 成功を区別して表示
+    reply_ok = sum(1 for r in results if r.get("mode") == "reply" and r.get("success"))
+    mention_ok = sum(1 for r in results if r.get("mode") in ("mention", "mention_fallback") and r.get("success"))
+    print(f"\n  ✅ 返信完了: {success_count}/{total}件 成功 (リプライ {reply_ok}件 + メンション {mention_ok}件)")
     return results
 
 
