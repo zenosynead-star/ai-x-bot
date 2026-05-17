@@ -44,10 +44,12 @@ jobs:
           MAX_POSTS_PER_DAY: '0'
           MAX_REPLIES_PER_DAY: '5'
           DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
-          # auto:    リプライ試行 → 403 ならメンション投稿でフォールバック（推奨）
-          # mention: 本文先頭に@usernameを付けた通常投稿のみ（403を確実回避）
-          # reply:   in_reply_to_tweet_id 指定のリプライのみ（新規垢は403で弾かれる）
-          REPLY_MODE: 'auto'
+          # reply:   in_reply_to_tweet_id 指定のリプライのみ。403なら何もせずスキップ
+          #          → 制限中は X 上に何も投稿されないが、メンション投稿でゴミも出ない
+          #          → 制限解除されたら自動でリプライとして届く
+          # auto:    リプライ試行 → 403 ならメンション投稿でフォールバック
+          # mention: 本文先頭に@usernameを付けた通常投稿のみ
+          REPLY_MODE: 'reply'
           PYTHONIOENCODING: 'utf-8'
         run: python main.py --scrape
 
