@@ -39,17 +39,15 @@ jobs:
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
-          # オリジナル投稿は一時停止中（返信制限解除の検知だけしたいため）
-          # 制限解除されたら '3' に戻して再開
-          MAX_POSTS_PER_DAY: '0'
+          # 2026-07-22 運用再開: オリジナル3件/日 + 返信auto (リプライ試行→403ならメンション代替)
+          MAX_POSTS_PER_DAY: '3'
           MAX_REPLIES_PER_DAY: '5'
           DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
           # reply:   in_reply_to_tweet_id 指定のリプライのみ。403なら何もせずスキップ
-          #          → 制限中は X 上に何も投稿されないが、メンション投稿でゴミも出ない
-          #          → 制限解除されたら自動でリプライとして届く
           # auto:    リプライ試行 → 403 ならメンション投稿でフォールバック
+          #          → 制限解除されたらコード変更なしで本来のリプライに自動移行
           # mention: 本文先頭に@usernameを付けた通常投稿のみ
-          REPLY_MODE: 'reply'
+          REPLY_MODE: 'auto'
           PYTHONIOENCODING: 'utf-8'
         run: python main.py --scrape
 
